@@ -68,7 +68,7 @@ def get_gradient(model: nn.Module, c: int, x: torch.Tensor) -> torch.Tensor:
     """
     x = x.detach().clone().requires_grad_(True)
     y = model(x)[..., c]
-    y.backward()
+    y.backward(torch.ones_like(y))
 
     return x.grad # type: ignore (the gradient is always defined)
 
@@ -128,6 +128,37 @@ def normalize_explanation(explanation: torch.Tensor) -> torch.Tensor:
     return explanation / explanation.pow(2).flatten(1).mean(1).sqrt()
 
 
+def visualize_explanation(explanation: torch.Tensor, quantile: float = 0.99) -> torch.Tensor:
+    """
+    Arbitrary method for making legible images out of explanations.
+
+    ### Input
+
+    explanation: Tensor containing an explanation of shape `(B, 3, H, W)`.
+    quantile: Which quantile should be mapped to the maximum value.
+    """
+    # take average over color channels
+    ex = explanation.mean(1)
+
+    # divide by the given quantile
+    q = ex.abs().flatten(1).quantile(quantile, dim=1)
+    ex = ex / q.view(-1, 1, 1)
+
+    # clip values between -1 and 1
+    ex = ex.clip(-1, 1)
+
+    # make positive values red and negative values blue as in Samek et al.: "Explaining Deep Neural Networks and Beyond: A Review of Methods and Applications"
+    relu_pos = ex.relu()
+    relu_neg = (-ex).relu()
+    ex = torch.stack([
+        1 - relu_neg, # more negative -> less red
+        1 - relu_pos - relu_neg, # further from zero -> less green
+        1 - relu_pos # more positive -> less blue
+    ], dim=1)
+
+    return ex
+
+
 #
 # Advanced functions
 #
@@ -164,7 +195,7 @@ def get_perturbation_curve(
     ...
 
 
-def _iterate_explanation_verbose(
+def verbose_iterate_explanation(
     explanation_method: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
     perturbation_method: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
     target: torch.Tensor,
@@ -227,109 +258,6 @@ def iterate_explanation(
 
     Tensor of the same shape as `target` containing the final explanation.
     """
-    baselines, explanations = _iterate_explanation_verbose(explanation_method, perturbation_method, target, baseline, n_iterations, noise)
-
-    return explanations[-1]
-
-
-#
-# IG variants
-#
-
-
-def _integrated_gradients_verbose(model: nn.Module, c: int, target: torch.Tensor, baseline: torch.Tensor, n_steps) -> tuple[list[torch.Tensor], list[torch.Tensor]]:
-    """
-    See `integrated_gradients` for an explanation of the function and its inputs.
-
-    ### Output
-
-    One list containing the evaluation points and another list containing the explanations up to those points.
-    """
-    ...
-
-
-def integrated_gradients(model: nn.Module, c: int, target: torch.Tensor, baseline: torch.Tensor, n_steps: int) -> torch.Tensor:
-    """
-    Integrated Gradients as in Sundararajan et al.: "Axiomatic Attribution for Deep Networks".
-
-    ### Input
-
-    model: Pytorch module trained on ImageNet with output shape `(B, 1000)`.
-    c: Class index; number between 0 and 999.
-    target: Tensor containing the target image of shape `(B, 3, H, W)`.
-    baseline: Tensor of the same shape as `target` containing the baseline.
-    n_steps: Number of integration steps.
-
-    ### Output
-
-    Tensor of the same shape as `target` containing the explanation.
-    """
-    points, explanations = _integrated_gradients_verbose(model, c, target, baseline, n_steps)
-
-    return explanations[-1]
-
-
-def _left_integrated_gradients_verbose(model: nn.Module, c: int, target: torch.Tensor, baseline: torch.Tensor, n_steps: int, threshold: float) -> tuple[list[torch.Tensor], list[torch.Tensor]]:
-    """
-    See  `left_integrated_gradients` for an explanation of the function and its inputs.
-
-    ### Output
-
-    One list containing the evaluation points and another list containing the explanations up to those points.
-    """
-    ...
-
-
-def left_integrated_gradients(model: nn.Module, c: int, target: torch.Tensor, baseline: torch.Tensor, n_steps: int, threshold: float) -> torch.Tensor:
-    """
-    Left Integrated Gradients as in Miglani et al.: "Investigating Saturation Effects in Integrated Gradients".
-
-    ### Input
-
-    model: Pytorch module trained on ImageNet with output shape `(B, 1000)`.
-    c: Class index; number between 0 and 999.
-    target: Tensor containing the target image of shape `(B, 3, H, W)`.
-    baseline: Tensor of the same shape as `target` containing the baseline.
-    n_steps: Number of integration steps.
-    threshold: Stopping criterion in the range `[0, 1]`. Matches `psi` in the aforementioned paper.
-
-    ### Output
-
-    Tensor of the same shape as `target` containing the explanation.
-    """
-    points, explanations = _left_integrated_gradients_verbose(model, c, target, baseline, n_steps, threshold)
-
-    return explanations[-1]
-
-
-def _guided_integrated_gradients_verbose(model: nn.Module, c: int, target: torch.Tensor, baseline: torch.Tensor, n_steps: int, frac_change: float) -> tuple[list[torch.Tensor], list[torch.Tensor]]:
-    """
-    See `guided_integrated_gradients` for an explanation of the function and its inputs.
-
-    ### Output
-
-    One list containing the evaluation points and another list containing the explanations up to those points.
-    """
-    ...
-
-
-def guided_integrated_gradients(model: nn.Module, c: int, target: torch.Tensor, baseline: torch.Tensor, n_steps: int, frac_change: float) -> torch.Tensor:
-    """
-    Guided Integrated Gradients as in Kapishnikov et al.: "Guided Integrated Gradients: an Adaptive Path Method for Removing Noise".
-
-    ### Input
-
-    model: Pytorch module trained on ImageNet with output shape `(B, 1000)`.
-    c: Class index; number between 0 and 999.
-    target: Tensor containing the target image of shape `(B, 3, H, W)`.
-    baseline: Tensor of the same shape as `target` containing the baseline.
-    n_steps: Number of integration steps.
-    frac_change: Fraction of features to change in each step.
-
-    ### Output
-
-    Tensor of the same shape as `target` containing the explanation.
-    """
-    points, explanations = _guided_integrated_gradients_verbose(model, c, target, baseline, n_steps, frac_change)
+    baselines, explanations = verbose_iterate_explanation(explanation_method, perturbation_method, target, baseline, n_iterations, noise)
 
     return explanations[-1]
