@@ -23,7 +23,7 @@ def inpaint(image: torch.Tensor, mask: torch.Tensor, radius: float) -> torch.Ten
     ### Input
 
     image: Tensor containing an image of shape `(3, H, W)` or `(B, 3, H, W)`.
-    mask: Tensor of the same shape as `image` and (preferably) of boolean type.
+    mask: Tensor of shape `(H, W)` or `(B, H, W)` and (preferably) of boolean type.
     radius: Inpaint radius passed to `cv2.inpaint`.
 
     ### Output
@@ -52,7 +52,7 @@ def inpaint(image: torch.Tensor, mask: torch.Tensor, radius: float) -> torch.Ten
     return image_inpainted
 
 
-def get_gradient(model: nn.Module, c: int, x: torch.Tensor) -> torch.Tensor:
+def get_gradient(model: nn.Module, c: int | torch.Tensor, x: torch.Tensor) -> torch.Tensor:
     """
     Get the gradient of an ImageNet-classificator with respect to a point and a specific class.
 
@@ -67,7 +67,7 @@ def get_gradient(model: nn.Module, c: int, x: torch.Tensor) -> torch.Tensor:
     Tensor of the same shape as `x` containing the gradient of `model` at point `x` with respect to class `c`.
     """
     x = x.detach().clone().requires_grad_(True)
-    y = model(x)[..., c]
+    y = model(x)[torch.arange(len(x), device=x.device), c]
     y.backward(torch.ones_like(y))
 
     return x.grad # type: ignore (the gradient is always defined)
@@ -134,9 +134,13 @@ def visualize_explanation(explanation: torch.Tensor, quantile: float = 0.99) -> 
 
     ### Input
 
-    explanation: Tensor containing an explanation of shape `(B, 3, H, W)`.
+    explanation: Tensor containing an explanation of shape `(3, H, W)` or `(B, 3, H, W)`.
     quantile: Which quantile should be mapped to the maximum value.
     """
+    # if explanation has no batch dimension, add it
+    if len(explanation.shape) == 3:
+        explanation = explanation.unsqueeze(0)
+
     # take average over color channels
     ex = explanation.mean(1)
 
@@ -156,6 +160,15 @@ def visualize_explanation(explanation: torch.Tensor, quantile: float = 0.99) -> 
         1 - relu_pos # more positive -> less blue
     ], dim=1)
 
+    # move color channel dimension to the end (because plotly requires it)
+    ex  = ex.permute(0, 2, 3, 1)
+
+    # if batch size is one, remove batch dimension
+    ex = ex.squeeze(0)
+
+    # move to cpu (because plotly requires it)
+    ex = ex.cpu()
+
     return ex
 
 
@@ -170,9 +183,9 @@ def get_perturbation_curve(
     explanation: torch.Tensor,
     n_points: int,
     perturbation: PerturbationType = "INTERPOLATE",
-    spacing: SpacingType = "LINEAR",
+    spacing: SpacingType = "LINEAR", # TODO
     apply_softmax: bool = False,
-) -> list[float]:
+) -> torch.Tensor:
     """
     Get a perturbation curve as in IV.A. from Samek et al.: "Explaining Deep Neural Networks and Beyond: A Review of Methods and Applications".
     The target is perturbed to different amounts and the resulting model output is measured.
@@ -182,7 +195,7 @@ def get_perturbation_curve(
     model: Pytorch module trained on ImageNet with output shape `(B, 1000)`.
     c: Class index; number between 0 and 999.
     target: Tensor containing the target image of shape `(B, 3, H, W)`.
-    explanation: Tensor containing an explanation to be evaluated by this function.
+    explanation: Tensor containing an explanation to be evaluated by this function of shape `(B, H, W)`.
     n_points: Number of evaluation points from which make up the curve.
     perturbation: Perturbation type for generating the perturbed samples.
     spacing: Spacing type for the evaluation points.
@@ -192,72 +205,29 @@ def get_perturbation_curve(
 
     List containing the model outputs at the evaluation points as `float`s.
     """
-    ...
+    _values = []
 
+    idx_batch = torch.arange(len(target), device=target.device)
 
-def verbose_iterate_explanation(
-    explanation_method: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
-    perturbation_method: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
-    target: torch.Tensor,
-    baseline: torch.Tensor,
-    n_iterations: int,
-    noise: float | Collection[float],
-) -> tuple[list[torch.Tensor], list[torch.Tensor]]:
-    """
-    See `iterate_explanation` for an explanation of the function and its inputs.
+    match perturbation:
+        case "INTERPOLATE":
+            perturbation_method = lambda target, mask: inpaint(target, mask, 5)
+        case "BLACK":
+            perturbation_method = lambda target, mask: torch.where(mask.unsqueeze(1).repeat(1, 3, 1, 1), 0, target)
 
-    ### Output
+    for t in np.linspace(0, 1, n_points):
+        mask = explanation > explanation.flatten(1).quantile(1 - t, dim=1).view(-1, 1, 1)
 
-    One list containing the baselines used and another list containing the resulting explanations.
-    """
-    baselines = []
-    explanations = []
+        target_perturbed = perturbation_method(target, mask)
 
-    # convert noise from float to list of floats
-    if not isinstance(noise, Collection):
-        noise = [noise] * n_iterations
+        with torch.no_grad():
+            y = model(target_perturbed)
 
-    if len(noise) != n_iterations:
-        raise ValueError("Number of noise values does not match number of iterations.")
+        if apply_softmax:
+            y = y.softmax(1)
 
-    for _noise in noise:
-        # get new explanation
-        explanation = explanation_method(target, baseline + _noise * torch.randn_like(baseline))
+        _values.append(y[idx_batch, c].clone())
 
-        # store current baseline and explanation
-        baselines.append(baseline)
-        explanations.append(explanation)
+    values = torch.stack(_values, dim=1)
 
-        # get new baseline
-        baseline = perturbation_method(target, explanation)
-
-    return baselines, explanations
-
-
-def iterate_explanation(
-    explanation_method: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
-    perturbation_method: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
-    target: torch.Tensor,
-    baseline: torch.Tensor,
-    n_iterations: int,
-    noise: float | Collection[float],
-) -> torch.Tensor:
-    """
-    Iteratively apply an explanation method. Our main contribution from the paper.
-
-    # Input
-
-    explanation_method: Maps a `(target, baseline)`-pair to an explanation (e.g. Integrated Gradients).
-    perturbation_method: Maps a `(target, explanation)`-pair to a new baseline.
-    target: Tensor containing the target image of shape `(B, 3, H, W)`.
-    baseline: Tensor containing the initial baseline of the same shape as `target`.
-    n_iterations: Number of iterations.
-    noise: How much Gaussian noise is applied to the baseline in each iteration. Can be a single value or a sequence of values, one for each iteration.
-
-    ### Output
-
-    Tensor of the same shape as `target` containing the final explanation.
-    """
-    baselines, explanations = verbose_iterate_explanation(explanation_method, perturbation_method, target, baseline, n_iterations, noise)
-
-    return explanations[-1]
+    return values

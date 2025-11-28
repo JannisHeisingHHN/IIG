@@ -4,7 +4,7 @@ from torch import nn
 
 from utils import *
 
-def verbose_integrated_gradients(model: nn.Module, c: int, target: torch.Tensor, baseline: torch.Tensor, n_steps: int, trapezoid: bool) -> tuple[list[torch.Tensor], list[torch.Tensor]]:
+def verbose_integrated_gradients(model: nn.Module, c: int | torch.Tensor, target: torch.Tensor, baseline: torch.Tensor, n_steps: int, trapezoid: bool) -> tuple[list[torch.Tensor], list[torch.Tensor]]:
     """
     See `integrated_gradients` for an explanation of the function and its inputs.
 
@@ -45,14 +45,14 @@ def verbose_integrated_gradients(model: nn.Module, c: int, target: torch.Tensor,
     return points, explanations
 
 
-def integrated_gradients(model: nn.Module, c: int, target: torch.Tensor, baseline: torch.Tensor, n_steps: int, trapezoid: bool) -> torch.Tensor:
+def integrated_gradients(model: nn.Module, c: int | torch.Tensor, target: torch.Tensor, baseline: torch.Tensor, n_steps: int, trapezoid: bool) -> torch.Tensor:
     """
     Integrated Gradients as in Sundararajan et al.: "Axiomatic Attribution for Deep Networks".
 
     ### Input
 
     model: Pytorch module trained on ImageNet with output shape `(B, 1000)`.
-    c: Class index; number between 0 and 999.
+    c: Class index; number between 0 and 999 or tensor of shape `(B)` with such entries.
     target: Tensor containing the target image of shape `(B, 3, H, W)`.
     baseline: Tensor of the same shape as `target` containing the baseline.
     n_steps: Number of integration steps.
@@ -69,13 +69,13 @@ def integrated_gradients(model: nn.Module, c: int, target: torch.Tensor, baselin
 
 def verbose_left_integrated_gradients(
     model: nn.Module,
-    c: int,
+    c: int | torch.Tensor,
     target: torch.Tensor,
     baseline: torch.Tensor,
     n_steps: int,
     threshold: float,
     n_search_steps: int,
-    trapezoid: bool
+    trapezoid: bool,
 ) -> tuple[list[torch.Tensor], list[torch.Tensor], list[torch.Tensor]]:
     """
     See  `left_integrated_gradients` for an explanation of the function and its inputs.
@@ -84,10 +84,11 @@ def verbose_left_integrated_gradients(
 
     One list containing the evaluation points and another list containing the explanations up to those points.
     """
-    # convert threshold from percentage to distance
-    y_baseline = model(baseline)[..., c]
-    y_target = model(target)[..., c]
-    dist_threshold = threshold * (y_target - y_baseline).abs()
+    # convert threshold from percentage to score
+    idx_batch = torch.arange(len(target), device=target.device)
+    y_baseline = model(baseline)[idx_batch, c]
+    y_target = model(target)[idx_batch, c]
+    y_threshold = threshold * (y_target - y_baseline).abs()
 
     # search for new target based on threshold via grid search
     target_proposal_lower = baseline.clone()
@@ -102,10 +103,10 @@ def verbose_left_integrated_gradients(
         points_search.append(new_proposal.clone())
 
         # evaluation at new proposal
-        y_new_proposal = model(new_proposal)[..., c]
+        y_new_proposal = model(new_proposal)[idx_batch, c]
 
         # if the value of the new proposal exceeds the threshold, the upper proposal is replaced, otherwise the lower proposal is replaced
-        mask_replace_upper = (y_new_proposal - y_baseline).abs() > dist_threshold
+        mask_replace_upper = (y_new_proposal - y_baseline).abs() > y_threshold
 
         target_proposal_upper[mask_replace_upper] = new_proposal[mask_replace_upper]
         target_proposal_lower[~mask_replace_upper] = new_proposal[~mask_replace_upper]
@@ -119,14 +120,23 @@ def verbose_left_integrated_gradients(
     return points_search, points, explanations
 
 
-def left_integrated_gradients(model: nn.Module, c: int, target: torch.Tensor, baseline: torch.Tensor, n_steps: int, threshold: float, n_search_steps: int, trapezoid: bool) -> torch.Tensor:
+def left_integrated_gradients(
+    model: nn.Module,
+    c: int | torch.Tensor,
+    target: torch.Tensor,
+    baseline: torch.Tensor,
+    n_steps: int,
+    threshold: float,
+    n_search_steps: int,
+    trapezoid: bool,
+) -> torch.Tensor:
     """
     Left Integrated Gradients as in Miglani et al.: "Investigating Saturation Effects in Integrated Gradients".
 
     ### Input
 
     model: Pytorch module trained on ImageNet with output shape `(B, 1000)`.
-    c: Class index; number between 0 and 999.
+    c: Class index; number between 0 and 999 or tensor of shape `(B)` with such entries.
     target: Tensor containing the target image of shape `(B, 3, H, W)`.
     baseline: Tensor of the same shape as `target` containing the baseline.
     n_steps: Number of integration steps.
@@ -143,7 +153,7 @@ def left_integrated_gradients(model: nn.Module, c: int, target: torch.Tensor, ba
     return explanations[-1]
 
 
-def verbose_guided_integrated_gradients(model: nn.Module, c: int, target: torch.Tensor, baseline: torch.Tensor, n_steps: int, frac_change: float) -> tuple[list[torch.Tensor], list[torch.Tensor]]:
+def verbose_guided_integrated_gradients(model: nn.Module, c: int | torch.Tensor, target: torch.Tensor, baseline: torch.Tensor, n_steps: int, frac_change: float) -> tuple[list[torch.Tensor], list[torch.Tensor]]:
     """
     See `guided_integrated_gradients` for an explanation of the function and its inputs.
 
@@ -154,14 +164,14 @@ def verbose_guided_integrated_gradients(model: nn.Module, c: int, target: torch.
     ...
 
 
-def guided_integrated_gradients(model: nn.Module, c: int, target: torch.Tensor, baseline: torch.Tensor, n_steps: int, frac_change: float) -> torch.Tensor:
+def guided_integrated_gradients(model: nn.Module, c: int | torch.Tensor, target: torch.Tensor, baseline: torch.Tensor, n_steps: int, frac_change: float) -> torch.Tensor:
     """
     Guided Integrated Gradients as in Kapishnikov et al.: "Guided Integrated Gradients: an Adaptive Path Method for Removing Noise".
 
     ### Input
 
     model: Pytorch module trained on ImageNet with output shape `(B, 1000)`.
-    c: Class index; number between 0 and 999.
+    c: Class index; number between 0 and 999 or tensor of shape `(B)` with such entries.
     target: Tensor containing the target image of shape `(B, 3, H, W)`.
     baseline: Tensor of the same shape as `target` containing the baseline.
     n_steps: Number of integration steps.
@@ -172,5 +182,73 @@ def guided_integrated_gradients(model: nn.Module, c: int, target: torch.Tensor, 
     Tensor of the same shape as `target` containing the explanation.
     """
     points, explanations = verbose_guided_integrated_gradients(model, c, target, baseline, n_steps, frac_change)
+
+    return explanations[-1]
+
+
+def verbose_iterate_explanation(
+    explanation_method: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
+    perturbation_method: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
+    target: torch.Tensor,
+    baseline: torch.Tensor,
+    n_iterations: int,
+    noise: float | Collection[float],
+) -> tuple[list[torch.Tensor], list[torch.Tensor]]:
+    """
+    See `iterate_explanation` for an explanation of the function and its inputs.
+
+    ### Output
+
+    One list containing the baselines used and another list containing the resulting explanations.
+    """
+    baselines = []
+    explanations = []
+
+    # convert noise from float to list of floats
+    if not isinstance(noise, Collection):
+        noise = [noise] * n_iterations
+
+    if len(noise) != n_iterations:
+        raise ValueError("Number of noise values does not match number of iterations.")
+
+    for _noise in noise:
+        # get new explanation
+        explanation = explanation_method(target, baseline + _noise * torch.randn_like(baseline))
+
+        # store current baseline and explanation
+        baselines.append(baseline)
+        explanations.append(explanation)
+
+        # get new baseline
+        baseline = perturbation_method(target, explanation)
+
+    return baselines, explanations
+
+
+def iterate_explanation(
+    explanation_method: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
+    perturbation_method: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
+    target: torch.Tensor,
+    baseline: torch.Tensor,
+    n_iterations: int,
+    noise: float | Collection[float],
+) -> torch.Tensor:
+    """
+    Iteratively apply an explanation method. Our main contribution from the paper.
+
+    # Input
+
+    explanation_method: Maps a `(target, baseline)`-pair to an explanation (e.g. Integrated Gradients).
+    perturbation_method: Maps a `(target, explanation)`-pair to a new baseline.
+    target: Tensor containing the target image of shape `(B, 3, H, W)`.
+    baseline: Tensor containing the initial baseline of the same shape as `target`.
+    n_iterations: Number of iterations.
+    noise: How much Gaussian noise is applied to the baseline in each iteration. Can be a single value or a sequence of values, one for each iteration.
+
+    ### Output
+
+    Tensor of the same shape as `target` containing the final explanation.
+    """
+    baselines, explanations = verbose_iterate_explanation(explanation_method, perturbation_method, target, baseline, n_iterations, noise)
 
     return explanations[-1]
