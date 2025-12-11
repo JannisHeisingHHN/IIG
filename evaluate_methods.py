@@ -5,15 +5,17 @@ from torchvision.models import resnet50, ResNet50_Weights
 
 from mycode import *
 from mycode.utils import PerturbationType
-from typing import Any, Callable
+from typing import Any
 
 import toml
 import argparse
 from pathlib import Path
 import logging
+from tqdm import tqdm
+import shutil
 
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format="%(message)s")
 log = logging.getLogger(__name__)
 
 
@@ -74,9 +76,15 @@ def load_explanation_methods(settings_method: dict[str, dict]) -> dict[str, Comp
     return methods
 
 
-def load_target(image_path: str, n_samples: int) -> torch.Tensor:
-    target = torch.concat(sample_images(image_path, n_samples, adjust_size=True), dim=0)
-    return target
+def load_targets(image_path: str, n_samples: int, batch_size: int) -> list[torch.Tensor]:
+    images = sample_images(image_path, n_samples, adjust_size=True)
+    targets = []
+
+    for i in range(0, n_samples, batch_size):
+        target = torch.concat(images[i:i+batch_size], dim=0)
+        targets.append(target)
+
+    return targets
 
 
 def load_model(classificator_name: str, apply_softmax: bool) -> ClassProjector:
@@ -125,11 +133,19 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    settings = toml.load(args.settings)
+    path_settings = Path(args.settings)
+    path_out = Path(args.output)
+
+    settings = toml.load(path_settings)
+    path_out.mkdir(parents=True, exist_ok=True)
+
+    # save settings file to output directory
+    shutil.copy2(path_settings, path_out / path_settings.name)
 
     settings_general: dict[str, Any] = settings['general']
     image_path = settings_general['image_path']
     n_samples = settings_general['n_samples']
+    batch_size = settings_general.get('batch_size', n_samples)
     classificator_name = settings_general['classificator']
     apply_softmax = settings_general['apply_softmax']
     device = settings_general['device']
@@ -138,21 +154,32 @@ if __name__ == "__main__":
     methods = load_explanation_methods(settings['method'])
 
     log.info("Loading targets")
-    target = load_target(image_path, n_samples).to(device)
+    targets = load_targets(image_path, n_samples, batch_size)
 
     log.info("Loading classificator model")
     model = load_model(classificator_name, apply_softmax).to(device)
-    model.select_class(target)
 
     perturbation_settings: dict[str, Any] = settings['perturbation_curve']
     n_perturbation_points = perturbation_settings['n_steps']
     perturbation_type = perturbation_settings['type']
 
-    path_out = Path(args.output)
-    path_out.mkdir(parents=True, exist_ok=True)
 
     log.info("Computing perturbation curves")
-    perturbation_curves = compute_perturbation_curves(model, target, methods, n_perturbation_points, perturbation_type)
+    perturbation_curves: dict[str, np.ndarray] = {method: np.zeros((0, n_perturbation_points)) for method in methods}
+
+    for target in tqdm(targets):
+        # move target to device
+        target = target.to(device)
+
+        # make sure that the model outputs are reduced to the predicted target classes
+        model.select_class(target)
+
+        # get perturbation curve batch
+        perturbation_curve_batch = compute_perturbation_curves(model, target, methods, n_perturbation_points, perturbation_type)
+
+        # accumulate perturbation curves
+        for method in methods:
+            perturbation_curves[method] = np.concatenate([perturbation_curves[method], perturbation_curve_batch[method]])
 
     log.info("Saving perturbation curves")
     for name, curve in perturbation_curves.items():

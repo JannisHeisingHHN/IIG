@@ -1,7 +1,8 @@
 [general]
 
 image_path = "D:/ImageNet/ILSVRC/Data/CLS-LOC/test/"
-n_samples = 5
+n_samples = 100
+batch_size = 10
 classificator = "resnet50"
 apply_softmax = false
 device = "cuda"
