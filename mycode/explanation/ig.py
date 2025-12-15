@@ -8,7 +8,8 @@ from ..utils import get_gradient
 class ExplanationIG(ExplanationInterface):
     def __init__(self, n_steps: int, trapezoid: bool) -> None:
         self.n_steps = n_steps
-        
+
+        self.gradient_weighting: Callable[[torch.Tensor, torch.Tensor], torch.Tensor]
         if trapezoid:
             self.gradient_weighting = lambda gradient, gradient_next: 0.5 * (gradient + gradient_next)
         else:
@@ -49,7 +50,7 @@ class ExplanationIG(ExplanationInterface):
             explanations.append(explanation.clone())
 
         return points, explanations
-    
+
 
     def __call__(self, model: Callable[[torch.Tensor], torch.Tensor], target: torch.Tensor, baseline: torch.Tensor) -> torch.Tensor:
         points, explanations = self.verbose(model, target, baseline)

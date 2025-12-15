@@ -28,8 +28,10 @@ def load_explanation_methods(settings_method: dict[str, dict]) -> dict[str, Comp
         # choose explanation method
         ExplanationMethod: type[ExplanationInterface]
         match method_settings['explanation_method']:
-            case "integrated_gradients":  ExplanationMethod = ExplanationIG
-            case x:                       raise ValueError(f"Unknown explanation method '{x}'.")
+            case "integrated_gradients":          ExplanationMethod = ExplanationIG
+            case "guided_integrated_gradients":   ExplanationMethod = ExplanationGIG
+            case "guided_integrated_gradients2":  ExplanationMethod = ExplanationGIG2
+            case x:                               raise ValueError(f"Unknown explanation method '{x}'.")
 
         explanation_method = ExplanationMethod(**method_settings.get('explanation_parameters', {}))
 

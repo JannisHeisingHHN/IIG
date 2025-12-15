@@ -25,23 +25,34 @@ explanation_parameters = {n_steps = 50, trapezoid = false}
 baseline_method = "black"
 
 
-# -- Iterative Integrated Gradients
-[method.IIG]
+# -- Guided Integrated Gradients
+[method.GIG]
 
-description = "Iterative Integrated Gradients"
+description = "Integrated Gradients - Baseline method"
 
-explanation_method = "integrated_gradients"
-explanation_parameters = {n_steps = 10, trapezoid = false}
+explanation_method = "guided_integrated_gradients"
+explanation_parameters = {n_steps = 50, p_optim = 0.1}
 
-baseline_method = "noisy_target"
-baseline_parameters = {noise = 0.1}
+baseline_method = "black"
 
 
-[method.IIG.iterate]
+# # -- Iterative Integrated Gradients
+# [method.IIG]
 
-n_iterations = 5
-noise = 0.1
-explanation_transforms = ["abs", "mean"]
+# description = "Iterative Integrated Gradients"
 
-perturbation_method = "inpaint_by_quantile"
-perturbation_parameters = {quantile = 0.4, radius = 5}
+# explanation_method = "integrated_gradients"
+# explanation_parameters = {n_steps = 10, trapezoid = false}
+
+# baseline_method = "noisy_target"
+# baseline_parameters = {noise = 0.1}
+
+
+# [method.IIG.iterate]
+
+# n_iterations = 5
+# noise = 0.1
+# explanation_transforms = ["abs", "mean"]
+
+# perturbation_method = "inpaint_by_quantile"
+# perturbation_parameters = {quantile = 0.4, radius = 5}

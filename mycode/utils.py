@@ -58,17 +58,16 @@ def inpaint(image: torch.Tensor, mask: torch.Tensor, radius: float) -> torch.Ten
 
 def get_gradient(model: Callable[[torch.Tensor], torch.Tensor], x: torch.Tensor) -> torch.Tensor: # TODO rename
     """
-    Get the gradient of an ImageNet-classificator with respect to a point and a specific class.
+    Get the gradient of a PyTorch module with respect to an input point.
 
     ### Input
 
-    model: Pytorch module trained on ImageNet with output shape `(B, 1000)`.
-    c: Class index; number between 0 and 999.
-    x: Tensor containing an image of shape `(B, 3, H, W)`.
+    model: PyTorch module.
+    x: Tensor that can be passed to `model`.
 
     ### Output
 
-    Tensor of the same shape as `x` containing the gradient of `model` at point `x` with respect to class `c`.
+    Tensor of the same shape as `x` containing the gradient of `model` at point `x`.
     """
     x = x.detach().clone().requires_grad_(True)
     y = model(x)
@@ -166,13 +165,13 @@ def visualize_explanation(explanation: torch.Tensor, quantile: float = 0.99) -> 
     # it can happen that the second entry (green) ends up being negative, so we clip again
     ex = ex.clip(0, 1)
 
-    # move color channel dimension to the end (because plotly requires it)
+    # move color channel dimension to the end (because matplotlib requires it)
     ex  = ex.permute(0, 2, 3, 1)
 
     # if batch size is one, remove batch dimension
     ex = ex.squeeze(0)
 
-    # move to cpu (because plotly requires it)
+    # move to cpu (because matplotlib requires it)
     ex = ex.cpu()
 
     return ex
