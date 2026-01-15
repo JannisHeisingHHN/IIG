@@ -4,6 +4,7 @@ from typing import Callable, Collection
 from .explanation_interface import ExplanationInterface
 from ..perturbation import PerturbationInterface
 from ..utils import get_explanation_transform
+from ..class_projector import ClassProjector
 
 # TODO docstrings
 class ExplanationIterative(ExplanationInterface):
@@ -24,7 +25,7 @@ class ExplanationIterative(ExplanationInterface):
         self.transform = get_explanation_transform(*transforms)
 
     
-    def verbose(self, model: Callable[[torch.Tensor], torch.Tensor], target: torch.Tensor, baseline: torch.Tensor):
+    def verbose(self, model: ClassProjector, target: torch.Tensor, baseline: torch.Tensor):
         baselines = []
         explanations = []
 
@@ -43,7 +44,7 @@ class ExplanationIterative(ExplanationInterface):
         return baselines, explanations
 
 
-    def __call__(self, model: Callable[[torch.Tensor], torch.Tensor], target: torch.Tensor, baseline: torch.Tensor) -> torch.Tensor:
+    def __call__(self, model: ClassProjector, target: torch.Tensor, baseline: torch.Tensor) -> torch.Tensor:
         baselines, explanations = self.verbose(model, target, baseline)
 
         return explanations[-1]

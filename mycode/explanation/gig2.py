@@ -3,6 +3,7 @@ from typing import Callable
 
 from .explanation_interface import ExplanationInterface
 from ..utils import get_gradient
+from ..class_projector import ClassProjector
 
 
 class ExplanationGIG2(ExplanationInterface):
@@ -18,7 +19,7 @@ class ExplanationGIG2(ExplanationInterface):
             self.gradient_weighting = lambda gradient, gradient_next: gradient_next
 
 
-    def verbose(self, model: Callable[[torch.Tensor], torch.Tensor], target: torch.Tensor, baseline: torch.Tensor) -> tuple[list[torch.Tensor], list[torch.Tensor]]:
+    def verbose(self, model: ClassProjector, target: torch.Tensor, baseline: torch.Tensor) -> tuple[list[torch.Tensor], list[torch.Tensor]]:
         """
         See `__call__` for an explanation of the function and its inputs.
 
@@ -91,7 +92,7 @@ class ExplanationGIG2(ExplanationInterface):
         return points, explanations
 
 
-    def __call__(self, model: Callable[[torch.Tensor], torch.Tensor], target: torch.Tensor, baseline: torch.Tensor) -> torch.Tensor: # TODO docstring
+    def __call__(self, model: ClassProjector, target: torch.Tensor, baseline: torch.Tensor) -> torch.Tensor: # TODO docstring
         points, explanations = self.verbose(model, target, baseline)
 
         return explanations[-1]

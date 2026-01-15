@@ -3,6 +3,7 @@ from typing import Callable
 
 from .explanation_interface import ExplanationInterface
 from ..utils import get_gradient
+from ..class_projector import ClassProjector
 
 
 class ExplanationGIG(ExplanationInterface):
@@ -11,7 +12,7 @@ class ExplanationGIG(ExplanationInterface):
         self.p_optim = p_optim
 
 
-    def verbose(self, model: Callable[[torch.Tensor], torch.Tensor], target: torch.Tensor, baseline: torch.Tensor) -> tuple[list[torch.Tensor], list[torch.Tensor]]:
+    def verbose(self, model: ClassProjector, target: torch.Tensor, baseline: torch.Tensor) -> tuple[list[torch.Tensor], list[torch.Tensor]]:
         """
         See `__call__` for an explanation of the function and its inputs.
 
@@ -26,6 +27,9 @@ class ExplanationGIG(ExplanationInterface):
         """
         batch_size, d1, d2, d3 = target.shape
         n_optim = int(self.p_optim * d1 * d2 * d3) # number of entries to optimise in each step
+
+        # because this function needs to reselect the class of the model, we save the previous projection and restore it at the end
+        prev_projection = model.projection
 
         points_all: list[list[torch.Tensor]] = []
         explanations_all: list[list[torch.Tensor]] = []
@@ -79,7 +83,8 @@ class ExplanationGIG(ExplanationInterface):
                     # set inactive and overshot entries to their target values (inactive entries might've been changed if there are less active entries than n_optim)
                     x[overshot | mask_inactive] = tar[overshot | mask_inactive]
 
-                    attr[idx] += (x - temp)[idx] * y[idx]
+                    # attr[idx] += (x - temp)[idx] * y[idx]
+                    attr += (x - temp) * y
 
                 points_single.append(x.clone())
                 explanations_single.append(attr.clone())
@@ -90,10 +95,13 @@ class ExplanationGIG(ExplanationInterface):
         points = [torch.concat(pts) for pts in zip(*points_all)]
         explanations = [torch.concat(exs) for exs in zip(*explanations_all)]
 
+        # restore previous projection
+        model.projection = prev_projection
+
         return points, explanations
 
 
-    def __call__(self, model: Callable[[torch.Tensor], torch.Tensor], target: torch.Tensor, baseline: torch.Tensor) -> torch.Tensor: # TODO docstring
+    def __call__(self, model: ClassProjector, target: torch.Tensor, baseline: torch.Tensor) -> torch.Tensor: # TODO docstring
         points, explanations = self.verbose(model, target, baseline)
 
         return explanations[-1]

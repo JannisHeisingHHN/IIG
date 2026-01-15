@@ -1,17 +1,26 @@
 [general]
 
 image_path = "D:/ImageNet/ILSVRC/Data/CLS-LOC/test/"
-n_samples = 100
-batch_size = 10
+n_samples = 10
+batch_size = 5
 classificator = "resnet50"
 apply_softmax = false
 device = "cuda"
 
 
 [perturbation_curve]
+# settings for the perturbation curve
 
-n_steps = 11
+n_steps = 7
 type = "interpolate"
+
+
+[MPRT]
+# settings for sMPRT and eMPRT
+
+n_random = 3 # number of randomized models
+eMPRT = {n_bins = 100}
+sMPRT = {n_samples = 2, sigma=0.2}
 
 
 # -- Integrated Gradients
@@ -28,31 +37,42 @@ baseline_method = "black"
 # -- Guided Integrated Gradients
 [method.GIG]
 
-description = "Integrated Gradients - Baseline method"
+description = "Guided Integrated Gradients - Original version"
 
 explanation_method = "guided_integrated_gradients"
-explanation_parameters = {n_steps = 50, p_optim = 0.1}
+explanation_parameters = {n_steps = 20, p_optim = 0.1}
 
 baseline_method = "black"
 
 
-# # -- Iterative Integrated Gradients
-# [method.IIG]
+# -- Guided Integrated Gradients reimagined
+[method.GIG2]
 
-# description = "Iterative Integrated Gradients"
+description = "Integrated Gradients - Reimagined"
 
-# explanation_method = "integrated_gradients"
-# explanation_parameters = {n_steps = 10, trapezoid = false}
+explanation_method = "guided_integrated_gradients2"
+explanation_parameters = {step_size = 30, p_optim = 0.1, trapezoid = false}
 
-# baseline_method = "noisy_target"
-# baseline_parameters = {noise = 0.1}
+baseline_method = "black"
 
 
-# [method.IIG.iterate]
+# -- Iterative Integrated Gradients
+[method.IIG]
 
-# n_iterations = 5
-# noise = 0.1
-# explanation_transforms = ["abs", "mean"]
+description = "Iterative Integrated Gradients"
 
-# perturbation_method = "inpaint_by_quantile"
-# perturbation_parameters = {quantile = 0.4, radius = 5}
+explanation_method = "integrated_gradients"
+explanation_parameters = {n_steps = 10, trapezoid = false}
+
+baseline_method = "noisy_target"
+baseline_parameters = {noise = 0.1}
+
+
+[method.IIG.iterate]
+
+n_iterations = 5
+noise = 0.1
+explanation_transforms = ["abs", "mean"]
+
+perturbation_method = "inpaint_by_quantile"
+perturbation_parameters = {quantile = 0.4, radius = 5}

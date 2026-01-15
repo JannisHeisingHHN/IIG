@@ -104,28 +104,6 @@ def load_model(classificator_name: str, apply_softmax: bool) -> ClassProjector:
     return model
 
 
-def compute_perturbation_curves(
-    model: nn.Module,
-    target: torch.Tensor,
-    methods: dict[str, CompleteMethod],
-    n_points: int,
-    perturbation: PerturbationType,
-) -> dict[str, np.ndarray]:
-    explanation_transform = get_explanation_transform("abs", "mean")
-
-    curves: dict[str, np.ndarray] = {}
-
-    for name, method in methods.items():
-        explanation = method(model, target)
-
-        ex_transformed = explanation_transform(explanation)
-
-        curve = get_perturbation_curve(model, target, ex_transformed, n_points, perturbation)
-
-        curves[name] = curve
-
-    return curves
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate explanation methods like Integrated Gradients.")
@@ -152,11 +130,14 @@ if __name__ == "__main__":
     apply_softmax = settings_general['apply_softmax']
     device = settings_general['device']
 
+
     log.info("Loading explanation methods")
     methods = load_explanation_methods(settings['method'])
 
+
     log.info("Loading targets")
     targets = load_targets(image_path, n_samples, batch_size)
+
 
     log.info("Loading classificator model")
     model = load_model(classificator_name, apply_softmax).to(device)
@@ -166,8 +147,20 @@ if __name__ == "__main__":
     perturbation_type = perturbation_settings['type']
 
 
-    log.info("Computing perturbation curves")
+    log.info("Loading MPRT settings")
+    mprt_settings: dict[str, Any] = settings['MPRT']
+    n_random = mprt_settings['n_random']
+    n_bins_emprt = mprt_settings['eMPRT']['n_bins']
+    n_samples_smprt = mprt_settings['sMPRT']['n_samples']
+    sigma_smprt = mprt_settings['sMPRT']['sigma']
+
+    models_rand = [randomize_model(model) for _ in range(n_random)]
+
+
+    log.info("Computing evaluation metrics")
     perturbation_curves: dict[str, np.ndarray] = {method: np.zeros((0, n_perturbation_points)) for method in methods}
+    emprts: dict[str, np.ndarray] = {method: np.zeros((0, n_random)) for method in methods}
+    smprts: dict[str, np.ndarray] = {method: np.zeros((0, n_random)) for method in methods}
 
     for target in tqdm(targets):
         # move target to device
@@ -175,16 +168,60 @@ if __name__ == "__main__":
 
         # make sure that the model outputs are reduced to the predicted target classes
         model.select_class(target)
+        for mr in models_rand:
+            mr.select_class(target)
 
-        # get perturbation curve batch
-        perturbation_curve_batch = compute_perturbation_curves(model, target, methods, n_perturbation_points, perturbation_type)
+        # generate noisy targets for sMPRT
+        range_target = (target.flatten(1).max(1).values - target.flatten(1).min(1).values).view(-1, 1, 1, 1)
+        targets_noisy = [target + sigma_smprt / range_target * torch.randn_like(target) for _ in range(n_samples_smprt)]
 
-        # accumulate perturbation curves
-        for method in methods:
-            perturbation_curves[method] = np.concatenate([perturbation_curves[method], perturbation_curve_batch[method]])
+        # accumulate evaluation metrics
+        for name, method in methods.items():
+            # compute explanation and entropy (for eMPRT)
+            explanation = method(model, target)
+            entropy = get_entropy(explanation, n_bins_emprt)
 
-    log.info("Saving perturbation curves")
-    for name, curve in perturbation_curves.items():
-        np.savetxt(path_out / f"{name}.csv", curve)
+            # compute averaged explanation for noisy targets (for sMPRT)
+            explanation_mean = torch.zeros_like(explanation)
+
+            for tn in targets_noisy:
+                explanation_mean += method(model, tn)
+
+            explanation_mean /= n_samples_smprt
+
+            # compute perturbation curve using absolute value of explanation and mean over color channels
+            perturbation_curve = get_perturbation_curve(model, target, explanation.abs().mean(1), n_perturbation_points, perturbation_type)
+            perturbation_curves[name] = np.concatenate([perturbation_curves[name], perturbation_curve])
+
+            # compute eMPRT and sMPRT
+            emprt = []
+            smprt = []
+            for mr in models_rand:
+                # compute explanation and entropy (for eMPRT) for randomized model
+                explanation_rand = method(mr, target)
+                entropy_rand = get_entropy(explanation_rand, n_bins_emprt)
+
+                # compute eMPRT
+                emprt.append((entropy_rand - entropy) / entropy)
+
+                # compute averaged explanation for noisy targets (for sMPRT)
+                explanation_rand_mean = torch.zeros_like(explanation)
+
+                for tn in targets_noisy:
+                    explanation_rand_mean += method(mr, tn)
+
+                explanation_rand_mean /= n_samples_smprt
+
+                # compute sMPRT
+                smprt.append(compute_ssim(explanation_mean, explanation_rand_mean))
+
+            emprts[name] = np.concatenate([emprts[name], np.stack(emprt, axis=1)])
+            smprts[name] = np.concatenate([smprts[name], np.stack(smprt, axis=1)])
+
+    log.info("Saving evaluation metrics")
+    for name in methods.keys():
+        np.savetxt(path_out / f"perturbation_curve_{name}.csv", perturbation_curves[name])
+        np.savetxt(path_out / f"eMPRT_{name}.csv", emprts[name])
+        np.savetxt(path_out / f"sMPRT_{name}.csv", smprts[name])
 
     log.info("Done!")
