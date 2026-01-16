@@ -1,0 +1,22 @@
+name: hcii26_iig
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - ipykernel
+  - matplotlib
+  - numpy
+  - pip
+  - python=3.12
+  - pytorch
+  - pytorch-cuda
+  - setuptools
+  - torchvision
+  - wheel
+  - pip:
+      - opencv-python
+      - scikit-image
+      - toml
+      - tqdm

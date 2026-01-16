@@ -10,7 +10,7 @@ import copy # needed for randomizing model weights
 from pathlib import Path # needed for iterating over a directory
 import matplotlib.image as mpl_img # needed for loading images
 
-from typing import Callable, Collection, Literal, Union, TypeVar
+from typing import Callable, Literal, Union
 
 
 SpacingType = Union[Literal["linear"], Literal[""]] # TODO add other spacing types
