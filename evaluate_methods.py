@@ -3,8 +3,7 @@ import torch
 from torch import nn
 from torchvision.models import resnet50, ResNet50_Weights
 
-from mycode import *
-from mycode.utils import PerturbationType
+from src import *
 from typing import Any
 
 import toml
