@@ -29,10 +29,10 @@ __all__ = [
     "inpaint",
     "normalize_explanation",
     "randomize_model",
-    "sample_images",
     "verbose_grid_search",
     "visualize_explanation",
 
     "ClassProjector",
     "CompleteMethod",
+    "ImageDataset",
 ]

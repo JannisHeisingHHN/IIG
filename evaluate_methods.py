@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 from torch import nn
+from torch.utils.data import DataLoader
 from torchvision.models import resnet50, ResNet50_Weights
 
 from src import *
@@ -77,17 +78,6 @@ def load_explanation_methods(settings_method: dict[str, dict]) -> dict[str, Comp
     return methods
 
 
-def load_targets(image_path: str | Path, n_samples: int, batch_size: int, device: str, show_tqdm: bool = True) -> list[torch.Tensor]:
-    images = sample_images(image_path, n_samples, device, adjust_size=True, show_tqdm=show_tqdm)
-    targets = []
-
-    for i in range(0, n_samples, batch_size):
-        target = torch.concat(images[i:i+batch_size], dim=0)
-        targets.append(target)
-
-    return targets
-
-
 def load_model(classificator_name: str, apply_softmax: bool) -> ClassProjector:
     match classificator_name:
         case "resnet50":  model = resnet50(weights = ResNet50_Weights.IMAGENET1K_V1)
@@ -128,12 +118,13 @@ if __name__ == "__main__":
     path_out.mkdir(parents=True, exist_ok=True)
     shutil.copy2(path_settings, path_out / path_settings.name)
 
+
     log.info("Loading explanation methods")
     methods = load_explanation_methods(settings['method'])
 
 
     log.info("Loading targets")
-    targets = load_targets(path_images, n_samples, batch_size, device)
+    dl_targets = DataLoader(ImageDataset(path_images, n_samples, device), batch_size = batch_size)
 
 
     log.info("Loading classificator model")
@@ -159,7 +150,7 @@ if __name__ == "__main__":
     emprts: dict[str, np.ndarray] = {method: np.zeros((0, n_random)) for method in methods}
     smprts: dict[str, np.ndarray] = {method: np.zeros((0, n_random)) for method in methods}
 
-    for target in tqdm(targets):
+    for target in tqdm(dl_targets):
         # move target to device
         target = target.to(device)
 
