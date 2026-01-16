@@ -11,6 +11,7 @@ from pathlib import Path # needed for iterating over a directory
 import matplotlib.image as mpl_img # needed for loading images
 
 from typing import Callable, Literal, Union
+from tqdm import tqdm
 
 
 SpacingType = Union[Literal["linear"], Literal[""]] # TODO add other spacing types
@@ -185,7 +186,7 @@ def visualize_explanation(explanation: torch.Tensor, quantile: float = 0.99) -> 
     return ex
 
 
-def sample_images(path_to_images: str | Path, n_samples: int, adjust_size: bool):
+def sample_images(path_to_images: str | Path, n_samples: int, device: str, adjust_size: bool, show_tqdm: bool = True) -> list[torch.Tensor]:
     """
     Sample images from a given directory.
 
@@ -206,12 +207,13 @@ def sample_images(path_to_images: str | Path, n_samples: int, adjust_size: bool)
 
     samples: list[torch.Tensor] = []
 
-    for i in image_indices:
+    _iter = tqdm(image_indices) if show_tqdm else image_indices
+    for i in _iter:
         # load image
         img = mpl_img.imread(image_list[i]).copy()
 
         # convert image to tensor
-        img_tensor = img_trafo(img).clip(0, 1).unsqueeze(0)
+        img_tensor = img_trafo(img).clip(0, 1).unsqueeze(0).to(device)
 
         # add color channels if image is grayscale
         if img_tensor.shape[1] == 1:
@@ -229,14 +231,14 @@ def sample_images(path_to_images: str | Path, n_samples: int, adjust_size: bool)
             img_tensor = resize_trafo(img_tensor).clip(0, 1)
 
         samples.append(img_tensor)
-    
+
     return samples
 
 
 def get_explanation_transform(*transforms: str) -> Callable[[torch.Tensor], torch.Tensor]:
     """
     Get a transform for explanation-type tensors based on the list of transform names given.
-    
+
     ### Input
 
     transforms: list of transform names. Currently supported are `abs` and `mean`.

@@ -77,8 +77,8 @@ def load_explanation_methods(settings_method: dict[str, dict]) -> dict[str, Comp
     return methods
 
 
-def load_targets(image_path: str | Path, n_samples: int, batch_size: int) -> list[torch.Tensor]:
-    images = sample_images(image_path, n_samples, adjust_size=True)
+def load_targets(image_path: str | Path, n_samples: int, batch_size: int, device: str, show_tqdm: bool = True) -> list[torch.Tensor]:
+    images = sample_images(image_path, n_samples, device, adjust_size=True, show_tqdm=show_tqdm)
     targets = []
 
     for i in range(0, n_samples, batch_size):
@@ -133,7 +133,7 @@ if __name__ == "__main__":
 
 
     log.info("Loading targets")
-    targets = load_targets(path_images, n_samples, batch_size)
+    targets = load_targets(path_images, n_samples, batch_size, device)
 
 
     log.info("Loading classificator model")
