@@ -13,9 +13,9 @@ class CompleteMethod:
 
     def verbose(self, model: ClassProjector, target) -> tuple[list[torch.Tensor], list[torch.Tensor]]:
         baseline = self.baseline_method(target)
-        points, explanations = self.explanation_method.verbose(model, target, baseline)
+        out = self.explanation_method.verbose(model, target, baseline)
 
-        return points, explanations
+        return out
 
 
     def __call__(self, model: ClassProjector, target) -> torch.Tensor:

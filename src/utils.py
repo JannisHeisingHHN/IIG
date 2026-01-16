@@ -338,7 +338,7 @@ def get_perturbation_curve(
 
     ### Output
 
-    List containing the model outputs at the evaluation points as `float`s.
+    Numpy array of shape `(B, N_POINTS)` containing the model outputs at the evaluation points as `float`s.
     """
     _values = []
 

@@ -1,5 +1,5 @@
 import torch
-from typing import Callable, Collection
+from typing import Collection
 
 from .explanation_interface import ExplanationInterface
 from ..perturbation import PerturbationInterface

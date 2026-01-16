@@ -6,6 +6,7 @@ from torchvision.models import resnet50, ResNet50_Weights
 
 from src import *
 from typing import Any
+from io import TextIOWrapper
 
 import toml
 import argparse
@@ -93,6 +94,13 @@ def load_model(classificator_name: str, apply_softmax: bool) -> ClassProjector:
     return model
 
 
+def write_batch(stream: TextIOWrapper, batch: np.ndarray) -> None:
+    for line in batch:
+        stream.write(", ".join(f"{entry:.18e}" for entry in line) + "\n")
+    
+    stream.flush()
+
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate explanation methods like Integrated Gradients.")
@@ -122,6 +130,19 @@ if __name__ == "__main__":
     log.info("Loading explanation methods")
     methods = load_explanation_methods(settings['method'])
 
+    # figure out names (iterative methods get one name per iteration)
+    names = []
+    for name, method in methods.items():
+        if isinstance(method.explanation_method, ExplanationIterative):
+            for i in range(method.explanation_method.n_iterations):
+                names.append(f"{name}-{i+1}")
+        else:
+            names.append(name)
+
+    streams_perturbation_curve = {name: open(path_out / f"perturbation_curve_{name}.csv", "w") for name in names}
+    streams_emprt = {name: open(path_out / f"emprt_{name}.csv", "w") for name in names}
+    streams_smprt = {name: open(path_out / f"smprt_{name}.csv", "w") for name in names}
+
 
     log.info("Loading targets")
     dl_targets = DataLoader(ImageDataset(path_images, n_samples, device), batch_size = batch_size)
@@ -145,11 +166,7 @@ if __name__ == "__main__":
     models_rand = [randomize_model(model) for _ in range(n_random)]
 
 
-    log.info("Computing evaluation metrics")
-    perturbation_curves: dict[str, np.ndarray] = {method: np.zeros((0, n_perturbation_points)) for method in methods}
-    emprts: dict[str, np.ndarray] = {method: np.zeros((0, n_random)) for method in methods}
-    smprts: dict[str, np.ndarray] = {method: np.zeros((0, n_random)) for method in methods}
-
+    log.info("Computing evaluation metrics") # TODO who knows if any of these comments make sense to mere mortals (check them, you dingus)
     for target in tqdm(dl_targets):
         # move target to device
         target = target.to(device)
@@ -160,55 +177,59 @@ if __name__ == "__main__":
             mr.select_class(target)
 
         # generate noisy targets for sMPRT
-        range_target = (target.flatten(1).max(1).values - target.flatten(1).min(1).values).view(-1, 1, 1, 1)
+        range_target = (target.flatten(1).max(1).values - target.flatten(1).min(1).values).view(batch_size, 1, 1, 1)
         targets_noisy = [target + sigma_smprt / range_target * torch.randn_like(target) for _ in range(n_samples_smprt)]
 
         # accumulate evaluation metrics
         for name, method in methods.items():
-            # compute explanation and entropy (for eMPRT)
-            explanation = method(model, target)
-            entropy = get_entropy(explanation, n_bins_emprt)
+            is_iterative = isinstance(method.explanation_method, ExplanationIterative)
 
-            # compute averaged explanation for noisy targets (for sMPRT)
-            explanation_mean = torch.zeros_like(explanation)
-
-            for tn in targets_noisy:
-                explanation_mean += method(model, tn)
-
-            explanation_mean /= n_samples_smprt
+            # compute explanation for clean target (-> perturbation curve) and noisy targets (-> sMPRT)
+            if is_iterative:
+                explanations = method.verbose(model, target)[1]
+                explanations_noisy = [torch.stack(method.verbose(model, tn)[1], dim=0) for tn in targets_noisy]
+            else:
+                explanations = [method(model, target)]
+                explanations_noisy = [method(model, tn).unsqueeze(0) for tn in targets_noisy]
 
             # compute perturbation curve using absolute value of explanation and mean over color channels
-            perturbation_curve = get_perturbation_curve(model, target, explanation.abs().mean(1), n_perturbation_points, perturbation_type)
-            perturbation_curves[name] = np.concatenate([perturbation_curves[name], perturbation_curve])
+            for i, ex in enumerate(explanations):
+                name_i = f"{name}-{i+1}" if is_iterative else name
+                perturbation_curve = get_perturbation_curve(model, target, ex.abs().mean(1), n_perturbation_points, perturbation_type)
+                write_batch(streams_perturbation_curve[name_i], perturbation_curve)
+
+            # compute explanation and entropy (-> eMPRT)
+            entropies = [get_entropy(ex, n_bins_emprt) for ex in explanations]
+
+            # compute mean explanation for noisy targets (-> sMPRT)
+            explanations_mean = torch.stack(explanations_noisy, dim=0).mean(0)
 
             # compute eMPRT and sMPRT
-            emprt = []
-            smprt = []
+            emprts: list[np.ndarray] = []
+            smprts: list[np.ndarray] = []
             for mr in models_rand:
                 # compute explanation and entropy (for eMPRT) for randomized model
-                explanation_rand = method(mr, target)
-                entropy_rand = get_entropy(explanation_rand, n_bins_emprt)
+                if is_iterative:
+                    explanations_rand = method.verbose(mr, target)[1]
+                    entropies_rand = np.stack([get_entropy(ex_r, n_bins_emprt) for ex_r in explanations_rand], axis=0)
+                    explanations_rand_noisy = [torch.stack(method.verbose(mr, tn)[1], dim=0) for tn in targets_noisy]
+                else:
+                    explanations_rand = [method(mr, target)]
+                    entropies_rand = get_entropy(explanations_rand[0], n_bins_emprt)[np.newaxis]
+                    explanations_rand_noisy = [method(mr, tn).unsqueeze(0) for tn in targets_noisy]
 
                 # compute eMPRT
-                emprt.append((entropy_rand - entropy) / entropy)
-
-                # compute averaged explanation for noisy targets (for sMPRT)
-                explanation_rand_mean = torch.zeros_like(explanation)
-
-                for tn in targets_noisy:
-                    explanation_rand_mean += method(mr, tn)
-
-                explanation_rand_mean /= n_samples_smprt
+                emprts.append((entropies_rand - entropies) / entropies)
 
                 # compute sMPRT
-                smprt.append(compute_ssim(explanation_mean, explanation_rand_mean))
+                explanations_rand_mean = torch.stack(explanations_rand_noisy, dim=0).mean(0)
+                smprts.append(np.stack([compute_ssim(ex, ex_rand) for ex, ex_rand in zip(explanations_mean, explanations_rand_mean)], axis=0))
 
-            emprts[name] = np.concatenate([emprts[name], np.stack(emprt, axis=1)])
-            smprts[name] = np.concatenate([smprts[name], np.stack(smprt, axis=1)])
-
-            # save evaluation metrics
-            np.savetxt(path_out / f"perturbation_curve_{name}.csv", perturbation_curves[name])
-            np.savetxt(path_out / f"eMPRT_{name}.csv", emprts[name])
-            np.savetxt(path_out / f"sMPRT_{name}.csv", smprts[name])
+            emprts_np = np.stack(emprts, axis=2)
+            smprts_np = np.stack(smprts, axis=2)
+            for i, (e, s) in enumerate(zip(emprts_np, smprts_np)):
+                name_i = f"{name}-{i+1}" if is_iterative else name
+                write_batch(streams_emprt[name_i], e)
+                write_batch(streams_smprt[name_i], s)
 
     log.info("Done!")
