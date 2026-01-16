@@ -77,7 +77,7 @@ def load_explanation_methods(settings_method: dict[str, dict]) -> dict[str, Comp
     return methods
 
 
-def load_targets(image_path: str, n_samples: int, batch_size: int) -> list[torch.Tensor]:
+def load_targets(image_path: str | Path, n_samples: int, batch_size: int) -> list[torch.Tensor]:
     images = sample_images(image_path, n_samples, adjust_size=True)
     targets = []
 
@@ -108,34 +108,32 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate explanation methods like Integrated Gradients.")
 
     parser.add_argument("-s", "--settings", type=str, required=True, help="Path to the settings file")
-    parser.add_argument("-o", "--output", type=str, required=True, help="Path to output directory")
 
     args = parser.parse_args()
 
     path_settings = Path(args.settings)
-    path_out = Path(args.output)
-
     settings = toml.load(path_settings)
-    path_out.mkdir(parents=True, exist_ok=True)
 
-    # save settings file to output directory
-    shutil.copy2(path_settings, path_out / path_settings.name)
-
+    log.info("Loadings general settings")
     settings_general: dict[str, Any] = settings['general']
-    image_path = settings_general['image_path']
+    path_images = Path(settings_general['image_path'])
+    path_out = Path(settings_general['out_path'])
     n_samples = settings_general['n_samples']
     batch_size = settings_general.get('batch_size', n_samples)
     classificator_name = settings_general['classificator']
     apply_softmax = settings_general['apply_softmax']
     device = settings_general['device']
 
+    # save settings file to output directory
+    path_out.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(path_settings, path_out / path_settings.name)
 
     log.info("Loading explanation methods")
     methods = load_explanation_methods(settings['method'])
 
 
     log.info("Loading targets")
-    targets = load_targets(image_path, n_samples, batch_size)
+    targets = load_targets(path_images, n_samples, batch_size)
 
 
     log.info("Loading classificator model")

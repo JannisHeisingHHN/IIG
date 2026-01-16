@@ -1,6 +1,7 @@
 [general]
 
 image_path = "D:/ImageNet/ILSVRC/Data/CLS-LOC/test/"
+out_path = "output/test_resnet50"
 n_samples = 10
 batch_size = 5
 classificator = "resnet50"

@@ -185,7 +185,7 @@ def visualize_explanation(explanation: torch.Tensor, quantile: float = 0.99) -> 
     return ex
 
 
-def sample_images(path_to_images: str, n_samples: int, adjust_size: bool):
+def sample_images(path_to_images: str | Path, n_samples: int, adjust_size: bool):
     """
     Sample images from a given directory.
 
