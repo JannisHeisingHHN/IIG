@@ -217,10 +217,9 @@ if __name__ == "__main__":
             emprts[name] = np.concatenate([emprts[name], np.stack(emprt, axis=1)])
             smprts[name] = np.concatenate([smprts[name], np.stack(smprt, axis=1)])
 
-    log.info("Saving evaluation metrics")
-    for name in methods.keys():
-        np.savetxt(path_out / f"perturbation_curve_{name}.csv", perturbation_curves[name])
-        np.savetxt(path_out / f"eMPRT_{name}.csv", emprts[name])
-        np.savetxt(path_out / f"sMPRT_{name}.csv", smprts[name])
+            # save evaluation metrics
+            np.savetxt(path_out / f"perturbation_curve_{name}.csv", perturbation_curves[name])
+            np.savetxt(path_out / f"eMPRT_{name}.csv", emprts[name])
+            np.savetxt(path_out / f"sMPRT_{name}.csv", smprts[name])
 
     log.info("Done!")
