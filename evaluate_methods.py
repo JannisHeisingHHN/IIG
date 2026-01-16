@@ -139,9 +139,9 @@ if __name__ == "__main__":
         else:
             names.append(name)
 
-    streams_perturbation_curve = {name: open(path_out / f"perturbation_curve_{name}.csv", "w") for name in names}
-    streams_emprt = {name: open(path_out / f"emprt_{name}.csv", "w") for name in names}
-    streams_smprt = {name: open(path_out / f"smprt_{name}.csv", "w") for name in names}
+    streams_perturbation_curve: dict[str, TextIOWrapper] = {name: open(path_out / f"perturbation_curve_{name}.csv", "w") for name in names}
+    streams_emprt: dict[str, TextIOWrapper] = {name: open(path_out / f"emprt_{name}.csv", "w") for name in names}
+    streams_smprt: dict[str, TextIOWrapper] = {name: open(path_out / f"smprt_{name}.csv", "w") for name in names}
 
 
     log.info("Loading targets")
@@ -231,5 +231,10 @@ if __name__ == "__main__":
                 name_i = f"{name}-{i+1}" if is_iterative else name
                 write_batch(streams_emprt[name_i], e)
                 write_batch(streams_smprt[name_i], s)
+
+    # close all streams (isn't it nice to be good, Mr. Irving?)
+    for stream in streams_perturbation_curve.values(): stream.close()
+    for stream in streams_emprt.values(): stream.close()
+    for stream in streams_smprt.values(): stream.close()
 
     log.info("Done!")
