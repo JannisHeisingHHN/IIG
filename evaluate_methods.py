@@ -167,7 +167,7 @@ if __name__ == "__main__":
 
 
     log.info("Computing evaluation metrics") # TODO who knows if any of these comments make sense to mere mortals (check them, you dingus)
-    for target in tqdm(dl_targets):
+    for target in tqdm(dl_targets, ncols=80):
         # move target to device
         target = target.to(device)
 
