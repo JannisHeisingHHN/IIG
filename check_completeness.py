@@ -104,7 +104,7 @@ def write_batch(stream: TextIOWrapper, batch: np.ndarray) -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Evaluate explanation methods like Integrated Gradients.")
+    parser = argparse.ArgumentParser(description="Check the completeness axiom for explanation methods like Integrated Gradients.")
 
     parser.add_argument("-s", "--settings", type=str, required=True, help="Path to the settings file")
 
@@ -140,9 +140,7 @@ if __name__ == "__main__":
         else:
             names.append(name)
 
-    streams_perturbation_curve: dict[str, TextIOWrapper] = {name: open(path_out / f"perturbation_curve_{name}.csv", "w") for name in names}
-    streams_emprt: dict[str, TextIOWrapper] = {name: open(path_out / f"emprt_{name}.csv", "w") for name in names}
-    streams_smprt: dict[str, TextIOWrapper] = {name: open(path_out / f"smprt_{name}.csv", "w") for name in names}
+    streams_error: dict[str, TextIOWrapper] = {name: open(path_out / f"error_{name}.csv", "w") for name in names}
 
 
     log.info("Loading targets")
@@ -157,82 +155,41 @@ if __name__ == "__main__":
     perturbation_type = perturbation_settings['type']
 
 
-    log.info("Loading MPRT settings")
-    mprt_settings: dict[str, Any] = settings['MPRT']
-    n_random = mprt_settings['n_random']
-    n_bins_emprt = mprt_settings['eMPRT']['n_bins']
-    n_samples_smprt = mprt_settings['sMPRT']['n_samples']
-    sigma_smprt = mprt_settings['sMPRT']['sigma']
-
-    models_rand = [randomize_model(model) for _ in range(n_random)]
-
-
     log.info("Computing evaluation metrics")
     for target in tqdm(dl_targets, ncols=80):
         # make sure that the model outputs are reduced to the predicted target classes
         model.select_class(target)
-        for mr in models_rand:
-            mr.select_class(target)
 
-        # generate noisy targets for sMPRT
-        range_target = (target.flatten(1).max(1).values - target.flatten(1).min(1).values).view(batch_size, 1, 1, 1)
-        targets_noisy = [target + sigma_smprt / range_target * torch.randn_like(target) for _ in range(n_samples_smprt)]
+        # compute model output of target
+        with torch.no_grad():
+            y_target = model(target).cpu().numpy()
 
         # accumulate evaluation metrics
         for name, method in methods.items():
+            # compute model output of baseline
+            with torch.no_grad():
+                y_baseline = model(method.baseline_method(target)).cpu().numpy()
+
+            # compute explanation for target
             is_iterative = isinstance(method.explanation_method, ExplanationIterative)
 
-            # compute explanation for clean target (-> perturbation curve) and noisy targets (-> sMPRT)
             if is_iterative:
                 explanations = method.verbose(model, target)[1]
-                explanations_noisy = [torch.stack(method.verbose(model, tn)[1], dim=0) for tn in targets_noisy]
             else:
                 explanations = [method(model, target)]
-                explanations_noisy = [method(model, tn).unsqueeze(0) for tn in targets_noisy]
 
-            # compute perturbation curve using absolute value of explanation and mean over color channels
+            # compute and store relative error
             for i, ex in enumerate(explanations):
+                diff_model: np.ndarray = y_target - y_baseline
+                sum_explanation = ex.flatten(1).sum(1).cpu().numpy()
+
+                error_abs = abs(diff_model - sum_explanation)
+                error_rel = np.nan_to_num(error_abs / diff_model)
+
                 name_i = f"{name}-{i+1}" if is_iterative else name
-                perturbation_curve = get_perturbation_curve(model, target, ex.abs().mean(1), n_perturbation_points, perturbation_type)
-                write_batch(streams_perturbation_curve[name_i], perturbation_curve)
-
-            # compute explanation and entropy (-> eMPRT)
-            entropies = [get_entropy(ex, n_bins_emprt) for ex in explanations]
-
-            # compute mean explanation for noisy targets (-> sMPRT)
-            explanations_mean = torch.stack(explanations_noisy, dim=0).mean(0)
-
-            # compute eMPRT and sMPRT
-            emprts: list[np.ndarray] = []
-            smprts: list[np.ndarray] = []
-            for mr in models_rand:
-                # compute explanation and entropy (for eMPRT) for randomized model
-                if is_iterative:
-                    explanations_rand = method.verbose(mr, target)[1]
-                    entropies_rand = np.stack([get_entropy(ex_r, n_bins_emprt) for ex_r in explanations_rand], axis=0)
-                    explanations_rand_noisy = [torch.stack(method.verbose(mr, tn)[1], dim=0) for tn in targets_noisy]
-                else:
-                    explanations_rand = [method(mr, target)]
-                    entropies_rand = get_entropy(explanations_rand[0], n_bins_emprt)[np.newaxis]
-                    explanations_rand_noisy = [method(mr, tn).unsqueeze(0) for tn in targets_noisy]
-
-                # compute eMPRT
-                emprts.append((entropies_rand - entropies) / entropies)
-
-                # compute sMPRT
-                explanations_rand_mean = torch.stack(explanations_rand_noisy, dim=0).mean(0)
-                smprts.append(np.stack([compute_ssim(ex, ex_rand) for ex, ex_rand in zip(explanations_mean, explanations_rand_mean)], axis=0))
-
-            emprts_np = np.stack(emprts, axis=2)
-            smprts_np = np.stack(smprts, axis=2)
-            for i, (e, s) in enumerate(zip(emprts_np, smprts_np)):
-                name_i = f"{name}-{i+1}" if is_iterative else name
-                write_batch(streams_emprt[name_i], e)
-                write_batch(streams_smprt[name_i], s)
+                write_batch(streams_error[name_i], np.stack([error_rel, error_abs], axis=1))
 
     # close all streams
-    for stream in streams_perturbation_curve.values(): stream.close()
-    for stream in streams_emprt.values(): stream.close()
-    for stream in streams_smprt.values(): stream.close()
+    for stream in streams_error.values(): stream.close()
 
     log.info("Done!")

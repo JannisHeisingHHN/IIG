@@ -1,9 +1,9 @@
 [general]
 
 image_path = "D:/ImageNet/ILSVRC/Data/CLS-LOC/test/"
-out_path = "output/test_resnet50"
-n_samples = 10
-batch_size = 2
+out_path = "output/resnet50"
+n_samples = 1000
+batch_size = 10
 classificator = "resnet50"
 apply_softmax = false
 device = "cuda"
@@ -19,13 +19,15 @@ type = "interpolate"
 [MPRT]
 # settings for sMPRT and eMPRT
 
-n_random = 1 # number of randomized models
+n_random = 3 # number of randomized models
 eMPRT = {n_bins = 100}
-sMPRT = {n_samples = 1, sigma=0.2}
+sMPRT = {n_samples = 50, sigma=0.2}
 
 
 # -- Integrated Gradients
 [method.IG]
+
+description = "Integrated Gradients - Baseline method"
 
 explanation_method = "integrated_gradients"
 explanation_parameters = {n_steps = 50, trapezoid = false}
@@ -33,8 +35,22 @@ explanation_parameters = {n_steps = 50, trapezoid = false}
 baseline_method = "black"
 
 
-# -- Guided Integrated Gradients (original version)
+# -- Integrated Gradients with noisy target as baseline
+[method.IG-noisy]
+
+description = "Integrated Gradients with noisy target as baseline"
+
+explanation_method = "integrated_gradients"
+explanation_parameters = {n_steps = 50, trapezoid = false}
+
+baseline_method = "noisy_target"
+baseline_parameters = {noise = 0.1}
+
+
+# -- Guided Integrated Gradients
 [method.GIG]
+
+description = "Guided Integrated Gradients - Original version"
 
 explanation_method = "guided_integrated_gradients"
 explanation_parameters = {n_steps = 20, p_optim = 0.1}
@@ -42,17 +58,21 @@ explanation_parameters = {n_steps = 20, p_optim = 0.1}
 baseline_method = "black"
 
 
-# -- Guided Integrated Gradients reimagined
-[method.GIG2]
+# # -- Guided Integrated Gradients reimagined
+# [method.GIG2]
 
-explanation_method = "guided_integrated_gradients2"
-explanation_parameters = {step_size = 30, p_optim = 0.1, trapezoid = false}
+# description = "Integrated Gradients - Reimagined"
 
-baseline_method = "black"
+# explanation_method = "guided_integrated_gradients2"
+# explanation_parameters = {step_size = 30, p_optim = 0.1, trapezoid = false}
+
+# baseline_method = "black"
 
 
 # -- Iterative Integrated Gradients
 [method.IIG]
+
+description = "Iterative Integrated Gradients"
 
 explanation_method = "integrated_gradients"
 explanation_parameters = {n_steps = 10, trapezoid = false}
@@ -60,21 +80,11 @@ explanation_parameters = {n_steps = 10, trapezoid = false}
 baseline_method = "noisy_target"
 baseline_parameters = {noise = 0.1}
 
-
 [method.IIG.iterate]
 
-n_iterations = 5
+n_iterations = 4
 noise = 0.1
 explanation_transforms = ["abs", "mean"]
 
 perturbation_method = "inpaint_by_quantile"
 perturbation_parameters = {quantile = 0.4, radius = 5}
-
-
-# -- SmoothGrad + Integrated Gradients
-[method.SmoothIG]
-
-explanation_method = "smooth_integrated_gradients"
-explanation_parameters = {n_steps = 50, trapezoid = false, noise = 0.2, n_samples = 30}
-
-baseline_method = "black"

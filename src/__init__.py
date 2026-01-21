@@ -16,6 +16,7 @@ __all__ = [
     "ExplanationGIG",
     "ExplanationGIG2",
     "ExplanationIterative",
+    "ExplanationSmoothIG",
 
     "PerturbationInterface",
     "PerturbationInpaintByQuantile",

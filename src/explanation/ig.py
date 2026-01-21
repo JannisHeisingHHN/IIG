@@ -6,6 +6,7 @@ from ..utils import get_gradient
 from ..class_projector import ClassProjector
 
 
+# TODO docstrings
 class ExplanationIG(ExplanationInterface):
     def __init__(self, n_steps: int, trapezoid: bool) -> None:
         self.n_steps = n_steps

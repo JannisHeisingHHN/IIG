@@ -3,6 +3,7 @@ from .ig import ExplanationIG
 from .gig import ExplanationGIG
 from .gig2 import ExplanationGIG2
 from .iterative import ExplanationIterative
+from .smooth_ig import ExplanationSmoothIG
 
 
 __all__ = [
@@ -11,4 +12,5 @@ __all__ = [
     "ExplanationGIG",
     "ExplanationGIG2",
     "ExplanationIterative",
+    "ExplanationSmoothIG",
 ]
