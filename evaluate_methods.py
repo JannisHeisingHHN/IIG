@@ -2,7 +2,7 @@ import numpy as np
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
-from torchvision.models import resnet50, ResNet50_Weights
+from torchvision.models import resnet50, vgg11, vit_b_32, ResNet50_Weights, VGG11_Weights, ViT_B_32_Weights
 
 from src import *
 from typing import Any
@@ -83,6 +83,8 @@ def load_explanation_methods(settings_method: dict[str, dict]) -> dict[str, Comp
 def load_model(classificator_name: str, apply_softmax: bool) -> ClassProjector:
     match classificator_name:
         case "resnet50":  model = resnet50(weights = ResNet50_Weights.IMAGENET1K_V1)
+        case "vgg11":     model = vgg11(weights = VGG11_Weights.IMAGENET1K_V1)
+        case "vit_b_32":  model = vit_b_32(weights = ViT_B_32_Weights.IMAGENET1K_V1)
         case x:           raise ValueError(f"Unknown classificator '{x}'.")
 
     # optionally add softmax
