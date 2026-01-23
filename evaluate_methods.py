@@ -225,12 +225,24 @@ if __name__ == "__main__":
                 explanations_rand_mean = torch.stack(explanations_rand_noisy, dim=0).mean(0)
                 smprts.append(np.stack([compute_ssim(ex, ex_rand) for ex, ex_rand in zip(explanations_mean, explanations_rand_mean)], axis=0))
 
+                # clear storage space
+                del explanations_rand
+                del explanations_rand_noisy
+
             emprts_np = np.stack(emprts, axis=2)
             smprts_np = np.stack(smprts, axis=2)
             for i, (e, s) in enumerate(zip(emprts_np, smprts_np)):
                 name_i = f"{name}-{i+1}" if is_iterative else name
                 write_batch(streams_emprt[name_i], e)
                 write_batch(streams_smprt[name_i], s)
+
+            # clear storage space
+            del explanations
+            del explanations_noisy
+
+        # clear storage space
+        del target
+        del targets_noisy
 
     # close all streams
     for stream in streams_perturbation_curve.values(): stream.close()

@@ -191,6 +191,12 @@ if __name__ == "__main__":
                 name_i = f"{name}-{i+1}" if is_iterative else name
                 write_batch(streams_error[name_i], np.stack([error_rel, error_abs], axis=1))
 
+            # clear storage space
+            del explanations
+
+        # clear storage space
+        del target
+
     # close all streams
     for stream in streams_error.values(): stream.close()
 
