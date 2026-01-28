@@ -33,7 +33,7 @@ class ExplanationSmoothIG(ExplanationInterface):
         range_target = (target.flatten(1).max(1).values - target.flatten(1).min(1).values).view(-1, 1, 1, 1)
 
         for _ in range(n):
-            target_noisy = target +  self.noise / range_target * torch.randn_like(target)
+            target_noisy = target + self.noise * range_target * torch.randn_like(target)
             _points, _explanations = self.inner_method.verbose(model, target_noisy, baseline)
 
             for i in range(n):
