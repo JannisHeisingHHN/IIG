@@ -30,9 +30,12 @@ class ExplanationIterative(ExplanationInterface):
         explanations = []
 
         for _noise in self.noise:
-            # get new explanation
+            # noisify baseline
             range_baseline = (baseline.flatten(1).max(1).values - baseline.flatten(1).min(1).values).view(-1, 1, 1, 1)
-            explanation = self.inner_method(model, target, baseline + _noise * range_baseline * torch.randn_like(baseline))
+            baseline = baseline + _noise * range_baseline * torch.randn_like(baseline)
+
+            # get new explanation
+            explanation = self.inner_method(model, target, baseline)
 
             # store current baseline and explanation
             baselines.append(baseline)
