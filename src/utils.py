@@ -2,17 +2,12 @@ import numpy as np
 import torch
 from torch import nn
 
-from torchvision.io import read_image # needed for loading images
-from torch.utils.data import Dataset # needed for presenting images in a sensible format
-import torchvision.transforms as tf # needed for processing images
 from skimage.metrics import structural_similarity # needed for SSIM for sMPRT
 
 import cv2 # needed for inpainting
 import copy # needed for randomizing model weights
-from pathlib import Path # needed for iterating over a directory
 
 from typing import Callable, Literal, Union
-from tqdm import tqdm
 
 
 SpacingType = Union[Literal["linear"], Literal[""]] # TODO add other spacing types
@@ -395,48 +390,6 @@ def compute_ssim(ex1: torch.Tensor, ex2: torch.Tensor) -> np.ndarray:
     return ssim
 
 
-#
-# Classes
-#
-
-class ImageDataset(Dataset):
-    def __init__(self, path_images: str | Path, size: int, device: str, start_index: int = 0) -> None:
-        path_images = Path(path_images)
-
-        self.img_list = tuple(path_images.iterdir())[start_index:size + start_index]
-        self.trafos = tf.Compose([
-            tf.Resize((224, 224)),
-        ])
-
-        self.size = len(self.img_list)
-        self.device = device
-
-
-    def __len__(self):
-        return self.size
-
-
-    def __getitem__(self, i) -> torch.Tensor:
-        img = read_image(self.img_list[i]) # load image
-        img = img / 255 # convert from [0, 255] to [0, 1]
-
-        # cut image down to largest possible square
-        c, h, w = img.shape
-        new_hw = min(h, w)
-        h_start = (h - new_hw) // 2
-        w_start = (w - new_hw) // 2
-        img = img[:, h_start:h_start+new_hw, w_start:w_start+new_hw]
-
-        if c == 1: # grayscale image -> add color channels
-            img = img.repeat(3, 1, 1)
-
-        img = self.trafos(img) # apply transformations
-
-        img = img.to(self.device) # move to correct device
-
-        return img
-
-
 
 __all__ = [
     "compute_ssim",
@@ -450,6 +403,4 @@ __all__ = [
     "randomize_model",
     "verbose_grid_search",
     "visualize_explanation",
-
-    "ImageDataset",
 ]

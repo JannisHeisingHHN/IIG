@@ -1,9 +1,13 @@
 from .baseline import *
 from .explanation import *
+from .interface import *
 from .perturbation import *
 from .utils import *
+
 from .class_projector import ClassProjector
 from .complete_method import CompleteMethod
+from .image_dataset import ImageDataset
+
 
 __all__ = [
     "BaselineInterface",
@@ -17,6 +21,10 @@ __all__ = [
     "ExplanationGIG2",
     "ExplanationIterative",
     "ExplanationSmoothIG",
+
+    "load_explanation_methods",
+    "load_model",
+    "write_batch",
 
     "PerturbationInterface",
     "PerturbationInpaintByQuantile",

@@ -1,7 +1,7 @@
 import torch
-from typing import Callable
-from . import ExplanationInterface, BaselineInterface
+from .baseline import BaselineInterface
 from .class_projector import ClassProjector
+from .explanation import ExplanationInterface
 
 
 # TODO docstrings
