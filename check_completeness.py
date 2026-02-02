@@ -76,7 +76,7 @@ def load_explanation_methods(settings_method: dict[str, dict]) -> dict[str, Comp
         # add method to dictionary
         method = CompleteMethod(explanation_method, baseline_method)
         methods[name] = method
-    
+
     return methods
 
 
@@ -100,7 +100,7 @@ def load_model(classificator_name: str, apply_softmax: bool) -> ClassProjector:
 def write_batch(stream: TextIOWrapper, batch: np.ndarray) -> None:
     for line in batch:
         stream.write(", ".join(f"{entry:.18e}" for entry in line) + "\n")
-    
+
     stream.flush()
 
 
@@ -168,25 +168,29 @@ if __name__ == "__main__":
 
         # accumulate evaluation metrics
         for name, method in methods.items():
-            # compute model output of baseline
-            with torch.no_grad():
-                y_baseline = model(method.baseline_method(target)).cpu().numpy()
-
             # compute explanation for target
             is_iterative = isinstance(method.explanation_method, ExplanationIterative)
 
             if is_iterative:
-                explanations = method.verbose(model, target)[1]
+                baselines, explanations = method.verbose(model, target)
+
+                # compute model output of each baseline iteration
+                with torch.no_grad():
+                        y_baselines = [model(b).cpu().numpy() for b in baselines]
             else:
                 explanations = [method(model, target)]
 
-            # compute and store relative error
-            for i, ex in enumerate(explanations):
-                diff_model: np.ndarray = y_target - y_baseline
+                # compute model output of baseline
+                with torch.no_grad():
+                    y_baselines = [model(method.baseline_method(target)).cpu().numpy()]
+
+            # compute and store absolute and relative error
+            for i, (y, ex) in enumerate(zip(y_baselines, explanations, strict=True)):
+                diff_model: np.ndarray = y_target - y
                 sum_explanation = ex.flatten(1).sum(1).cpu().numpy()
 
                 error_abs = abs(diff_model - sum_explanation)
-                error_rel = np.nan_to_num(error_abs / diff_model)
+                error_rel = abs(np.nan_to_num(error_abs / diff_model))
 
                 name_i = f"{name}-{i+1}" if is_iterative else name
                 write_batch(streams_error[name_i], np.stack([error_rel, error_abs], axis=1))
