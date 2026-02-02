@@ -13,9 +13,9 @@ class ExplanationIterative(ExplanationInterface):
         self.perturbation_method = perturbation_method
         self.n_iterations = n_iterations
 
-        # convert noise from float to list of floats
+        # convert noise from float to list of floats. The first iteration should not receive noise
         if not isinstance(noise, Collection):
-            noise = [noise] * n_iterations
+            noise = [0.] + [noise] * (n_iterations - 1)
 
         if len(noise) != n_iterations:
             raise ValueError("Number of noise values does not match number of iterations.")
