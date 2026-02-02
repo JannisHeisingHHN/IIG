@@ -400,15 +400,15 @@ def compute_ssim(ex1: torch.Tensor, ex2: torch.Tensor) -> np.ndarray:
 #
 
 class ImageDataset(Dataset):
-    def __init__(self, path_images: str | Path, size: int, device: str) -> None:
+    def __init__(self, path_images: str | Path, size: int, device: str, start_index: int = 0) -> None:
         path_images = Path(path_images)
 
-        self.img_list = tuple(path_images.iterdir())
+        self.img_list = tuple(path_images.iterdir())[start_index:size + start_index]
         self.trafos = tf.Compose([
             tf.Resize((224, 224)),
         ])
 
-        self.size = size
+        self.size = len(self.img_list)
         self.device = device
 
 

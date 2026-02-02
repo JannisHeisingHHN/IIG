@@ -80,12 +80,12 @@ def load_explanation_methods(settings_method: dict[str, dict]) -> dict[str, Comp
     return methods
 
 
-def load_model(classificator_name: str, apply_softmax: bool) -> ClassProjector:
-    match classificator_name:
+def load_model(classifier_name: str, apply_softmax: bool) -> ClassProjector:
+    match classifier_name:
         case "resnet50":  model = resnet50(weights = ResNet50_Weights.IMAGENET1K_V1)
         case "vgg11":     model = vgg11(weights = VGG11_Weights.IMAGENET1K_V1)
         case "vit_b_32":  model = vit_b_32(weights = ViT_B_32_Weights.IMAGENET1K_V1)
-        case x:           raise ValueError(f"Unknown classificator '{x}'.")
+        case x:           raise ValueError(f"Unknown classifier '{x}'.")
 
     # optionally add softmax
     if apply_softmax:
@@ -120,10 +120,13 @@ if __name__ == "__main__":
     path_images = Path(settings_general['image_path'])
     path_out = Path(settings_general['out_path'])
     n_samples = settings_general['n_samples']
+    start_index = settings_general.get('start_index', 0)
     batch_size = settings_general.get('batch_size', n_samples)
-    classificator_name = settings_general['classificator']
+    classifier_name = settings_general['classificator']
     apply_softmax = settings_general['apply_softmax']
     device = settings_general['device']
+
+    append_output = (start_index != 0)
 
     # save settings file to output directory
     path_out.mkdir(parents=True, exist_ok=True)
@@ -133,6 +136,8 @@ if __name__ == "__main__":
     log.info("Loading explanation methods")
     methods = load_explanation_methods(settings['method'])
 
+
+    log.info("Establishing file streams")
     # figure out names (iterative methods get one name per iteration)
     names = []
     for name, method in methods.items():
@@ -142,15 +147,35 @@ if __name__ == "__main__":
         else:
             names.append(name)
 
-    streams_error: dict[str, TextIOWrapper] = {name: open(path_out / f"error_{name}.csv", "w") for name in names}
+    # safety check that the start index makes sense
+    if append_output:
+        for name in names:
+            for prefix in ["perturbation_curve", "emprt", "smprt"]:
+                p = path_out / f"{prefix}_{name}.csv"
+                x = np.loadtxt(p, delimiter=",")
+                l = len(x)
+
+                if l != start_index:
+                    raise ValueError(f"Start index {start_index} must be equal to existing number of entries, but file {p} contains {l} entries.")
+
+    stream_mode = "w" if start_index == 0 else "a"
+    streams_error: dict[str, TextIOWrapper] = {name: open(path_out / f"error_{name}.csv", stream_mode) for name in names}
 
 
     log.info("Loading targets")
-    dl_targets = DataLoader(ImageDataset(path_images, n_samples, device), batch_size = batch_size)
+    dl_targets = DataLoader(
+        ImageDataset(
+            path_images,
+            n_samples,
+            device,
+            start_index = start_index,
+        ),
+        batch_size = batch_size,
+    )
 
 
-    log.info("Loading classificator model")
-    model = load_model(classificator_name, apply_softmax).to(device)
+    log.info(f"Loading classifier model: {classifier_name}")
+    model = load_model(classifier_name, apply_softmax).to(device)
 
     perturbation_settings: dict[str, Any] = settings['perturbation_curve']
     n_perturbation_points = perturbation_settings['n_steps']
