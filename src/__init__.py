@@ -1,6 +1,5 @@
 from .baseline import *
 from .explanation import *
-from .interface import *
 from .perturbation import *
 from .utils import *
 
@@ -21,10 +20,6 @@ __all__ = [
     "ExplanationGIG2",
     "ExplanationIterative",
     "ExplanationSmoothIG",
-
-    "load_explanation_methods",
-    "load_model",
-    "write_batch",
 
     "PerturbationInterface",
     "PerturbationInpaintByQuantile",
