@@ -135,7 +135,7 @@ if __name__ == "__main__":
     # Because multiple runs may write to the same directory, the settings files are timestamped to avoid overwriting
     path_out.mkdir(parents=True, exist_ok=True)
     path_copy_settings = path_out / path_settings.name
-    path_copy_settings = path_copy_settings.with_stem(path_settings.stem + datetime.now().strftime("%Y%m%d%H%M%S"))
+    path_copy_settings = path_copy_settings.with_stem(path_settings.stem + "_" + datetime.now().strftime("%Y%m%d%H%M%S"))
     shutil.copy2(path_settings, path_copy_settings)
 
     for k, v in settings_general.items():
