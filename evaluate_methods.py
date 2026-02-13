@@ -207,7 +207,7 @@ if __name__ == "__main__":
     log.info(f" - measure_smprt: {measure_smprt}")
 
     # approximation error (doesn't have settings)
-    measure_error = ("error" in metrics_settings)
+    measure_error = bool(metrics_settings.get("error", False))
     if measure_error:
         file_prefixes.append("error")
     log.info(f" - measure_error: {measure_error}")
